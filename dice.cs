@@ -1,16 +1,19 @@
 ﻿using UnityEngine;
 
+
 public class dice : MonoBehaviour
 {
-    enum diceFaceNumber{
-        ONE,TWO,THREE,FOUR,FIVE,SIX,NONE
-    }
+ 
     enum direction
     {
         RIGHT,FORWARD,LEFT,UP,DOWN
     }
+    enum playerState
+    {
+        POWER,NON_POWER
+    }
     direction _direction,_prevDirection;
-    diceFaceNumber _diceFaceNumber, _prevDiceFaceNumber;
+    playerState _playerState;
     Transform diceTransform;
     float gravity;
     Vector3 moveDirection;
@@ -33,24 +36,26 @@ public class dice : MonoBehaviour
     int counter = 0;
     int floorClimbed;
     Vector3 initialRoomPosition;
+    int powerEffectTurn;
     public int teleportationValue;
-    GameObject[] rooms;
+     GameObject particleEffect;
     void Start()
     {
         runTimeInstantiateAndInitializing();
-        
-   
+        gameManager.Notifications.AddListener(notificationManager.EVENT_TYPE.MOVE_PLAYER, movePlayerWithDiceNumber);
+      //  particleEffect.transform.position = diceTransform.position;
+        //particleEffect.transform.SetParent(diceTransform);
+        //particleEffect.SetActive(true);
         if (Physics.Raycast(diceTransform.position, -Vector3.up, out hit))
         {
             initialPosition = hit.collider.gameObject.transform.position;
             initialRoomPosition = hit.collider.gameObject.transform.position;
 			diceTransform.position= hit.collider.gameObject.transform.position+new Vector3(0,roomSize/2,0);
-            Debug.Log(initialPosition);
+          //  Debug.Log(initialPosition);
              diceTracking = new GameObject("diceTracking");
             diceTracking.transform.position = initialPosition;
             diceTracking.transform.SetParent(diceTransform);
         }
-        rooms = GameObject.FindGameObjectsWithTag ("room");
     }
 
 
@@ -63,7 +68,10 @@ public class dice : MonoBehaviour
             moveDirection.y -= (speed * (gravity * Time.deltaTime));
             _characterController.Move(moveDirection * Time.deltaTime);
         }
-       
+        if (counter < 0)
+        {
+            diceRoller._inputState = gameManager.inputState.inputOn;
+        }
         if (movePlayer)
         {
             
@@ -81,24 +89,48 @@ public class dice : MonoBehaviour
                 }
          
         }
+       
         
     }
     void findInitialPosition()
     {
-        if (Physics.Raycast(diceTransform.position, -Vector3.up, out hit))
+        try
         {
+            if (Physics.Raycast(diceTransform.position, -Vector3.up, out hit))
+            {
 
-            initialPosition = hit.collider.gameObject.transform.position;
+                initialPosition = hit.collider.gameObject.transform.position;
+            }
+        }
+        catch
+        {
+            Debug.Log("Asddddddddddddddddd");
         }
     }
     public void OnClick()
     {
-        rollTheDice();
-         functionRequierdToMoveDice();
-        movePlayer = true;
-    
+
+        if (powerEffectTurn <= 0)
+        {
+            _playerState = playerState.NON_POWER;
+        }
+        else
+        {
+            _playerState=playerState.POWER;
+            powerEffectTurn--;
+        }
+            //rollTheDice();
+            functionRequierdToMoveDice();
+            movePlayer = true;
+           // particleEffect.SetActive(true);
+            Debug.Log(powerEffectTurn);
+            Debug.Log(_playerState);
     }
-  
+    void movePlayerWithDiceNumber(int steps)
+    {
+        counter = steps;
+        OnClick();
+  }
     void checkRoomProperty()
     {
 
@@ -106,43 +138,65 @@ public class dice : MonoBehaviour
         {
             if (hit.collider.tag == "hole")
             {
-                Debug.Log("HOLE");
+                if (_playerState == playerState.NON_POWER)
+                {
+                    Debug.Log("HOLE");
+
+                    gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.PLAY_SOUND, 1);
+                    makeBallGoDown();
+                }
             }
             else if (hit.collider.tag == "elevator")
             {
 				makeBallGoUp();
-
+                gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.PLAY_SOUND, 0);
                 Debug.Log("elevator");
             }
             else if (hit.collider.tag == "power")
             {
                 Debug.Log("power");
+                powerEffectTurn = 2;
+                gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.PLAY_SOUND, 2);
+                particleEffect.SetActive(true);
             }
             else if (hit.collider.tag == "teleportation")
             {
                 Debug.Log("teleportation");
+                particleEffect.SetActive(true);
+                teleportationValue = Random.Range(6, 10);
                 counter = teleportationValue;
+                functionRequierdToMoveDice();
             }
         }
     }
 	void makeBallGoUp(){
         findInitialPosition();
         floorClimbed++;
+        gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.TRANS_FLOOR_ON, floorClimbed);
+
         changeFloor(initialPosition);
-      Debug.Log(pointToMove);
+     // Debug.Log(pointToMove);
      // counter = 23;
      // functionRequierdToMoveDice();
 
 	}
+    void makeBallGoDown()
+    {
+        findInitialPosition();
+       
+       
+
+        changeFloorDown(initialPosition);
+        floorClimbed--;
+        gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.TRANS_FLOOR_ON, floorClimbed);
+       
+    }
     void functionRequierdToMoveDice()
     {
         // Debug.Log("hellow");
         counter--;
         if (counter >= 0)
         {
-
-			hideotherfloor();
-			Debug.Log ("floor Hidden");
             //  Debug.Log("claaedhellow");
             makeDirectionNormal();
             findInitialPosition();
@@ -153,8 +207,9 @@ public class dice : MonoBehaviour
         {
             //Debug.Log("checkRoomProperty");
             checkRoomProperty();
+           
         }
-        Debug.Log(counter);
+        //Debug.Log(counter);
 
     }
    
@@ -191,12 +246,23 @@ public class dice : MonoBehaviour
         }
         else if (_direction == direction.DOWN)
         {
-            directionalVector = Vector3.right;
-            _direction = direction.RIGHT;
-            _prevDirection = direction.RIGHT;
+            if (_prevDirection == direction.LEFT)
+            {
+                directionalVector = Vector3.left;
+                _direction = direction.LEFT;
+                _prevDirection = direction.LEFT;
+            }
+            else if (_prevDirection == direction.RIGHT)
+            {
+                directionalVector = Vector3.right;
+                _direction = direction.RIGHT;
+                _prevDirection = direction.RIGHT;
+
+            }
+          
         }
 		
-          Debug.Log(_direction);
+        //  Debug.Log(_direction);
     }
     
     
@@ -207,13 +273,20 @@ public class dice : MonoBehaviour
         if(roomNumber%(noOfRows*noOfColumns)==0)
         {
             floorClimbed++;
+            //make that floor visible
+            //other invisible
+            gameManager.Notifications.postNotification(notificationManager.EVENT_TYPE.TRANS_FLOOR_ON, floorClimbed);
+            findInitialPosition();
             changeFloor(initialRoomPosition);
             findInitialPosition();
             counter--;
-            if (counter <= 0)
+            if (counter < 0)
             {
+                Debug.Log("adsssssssssssssssssssssss");
                 return;
             }
+            roomNumber++;
+            makeDirectionNormal();
            // findInitialPosition();
             
         }
@@ -227,23 +300,41 @@ public class dice : MonoBehaviour
        
         //Debug.Log("_direction"+_direction);
       //  Debug.Log("_prevDirection" + _prevDirection);
-        
+     //   Debug.Log("roomNumber" + roomNumber);
         setDestination();
         moveOneStep();
 
     }
     void changeFloor(Vector3 roomPosition)
     {
-       // Debug.Log("change floor");
-        diceTransform.position = roomPosition + new Vector3(0, floorClimbed * roomGap + roomSize, 0);
+        Debug.Log("change floor");
+        Debug.Log(floorClimbed);
+        diceTransform.position = roomPosition + new Vector3(0, floorClimbed* roomGap + roomSize, 0);
         findInitialPosition();
         //making ball to fall on floor
         pointToMove = initialPosition;
+        _prevDirection = _direction;
         _direction = direction.DOWN;
         directionalVector = Vector3.down;
         counter--;
         moveOneStep();
         
+
+    }
+    void changeFloorDown(Vector3 roomPosition)
+    {
+        Debug.Log("change floor");
+        Debug.Log(floorClimbed);
+        diceTransform.position = roomPosition -new Vector3(0, floorClimbed * roomGap - roomSize, 0);
+        findInitialPosition();
+        //making ball to fall on floor
+        pointToMove = initialPosition;
+        _prevDirection = _direction;
+        _direction = direction.DOWN;
+        directionalVector = Vector3.down;
+        counter--;
+        moveOneStep();
+
 
     }
    
@@ -288,68 +379,25 @@ public class dice : MonoBehaviour
    
     void setDestination()
     {
-        Debug.Log(directionalVector);
+       // Debug.Log(directionalVector);
         pointToMove = initialPosition + directionalVector * roomSize;
-        Debug.Log("pointToMove" +pointToMove);
+       // Debug.Log("pointToMove" +pointToMove);
     }
     
     void moveOneStep()
     {
         moveDirection = directionalVector;
         moveOnXAxis = true;
-        Debug.Log("moved");
+      //  Debug.Log("moved");
     }
     
-    void rollTheDice()
-    {
-        int diceNumber = Random.Range(1, 7);
-        if (diceNumber == 1)
-        {
-            counter = 1;
-            _diceFaceNumber = diceFaceNumber.ONE;
-        }
-        else if (diceNumber == 2)
-        {
-            counter = 2;
-            _diceFaceNumber = diceFaceNumber.TWO;
-
-        }
-        else if (diceNumber == 3)
-        {
-            counter = 3;
-            _diceFaceNumber = diceFaceNumber.THREE;
-
-        }
-        else if (diceNumber == 4)
-        {
-            counter = 4;
-            _diceFaceNumber = diceFaceNumber.FOUR;
-        }
-        else if (diceNumber == 5)
-        {
-            counter = 5;
-            _diceFaceNumber = diceFaceNumber.FIVE;
-        }
-        else
-        {
-            counter = 6;
-            _diceFaceNumber = diceFaceNumber.SIX;
-        }
-        if (_diceFaceNumber == _prevDiceFaceNumber)
-        {
-            _prevDiceFaceNumber = _diceFaceNumber;
-        }
-		counter=1;
-        Debug.Log(_diceFaceNumber);
-    }
+   
     void runTimeInstantiateAndInitializing()
     {
-        _diceFaceNumber = new diceFaceNumber();
+      
         _direction = new direction();
         _prevDirection = new direction();
-        _prevDiceFaceNumber = new diceFaceNumber();
-        _diceFaceNumber = diceFaceNumber.NONE;
-        _prevDiceFaceNumber = diceFaceNumber.NONE;
+        _playerState = playerState.NON_POWER;
         diceTransform = this.transform;
         gravity = 10;
         moveDirection = Vector3.right;
@@ -367,86 +415,12 @@ public class dice : MonoBehaviour
         _direction = direction.RIGHT;
         _prevDirection = direction.RIGHT;
         movePlayer = false;
+        particleEffect = diceTransform.GetChild(0).transform.gameObject;
+      
+        particleEffect.SetActive(false);
+        powerEffectTurn = 0;
+        
 	
     }
-      void hideotherfloor(){
-
-		Debug.Log ("Room Number:  " + roomNumber);
-		//need to be called in every steps, even while eaten or just fucked up
-
-
-		//first show all floor need to be changed later
-		foreach (var b in rooms) {
-
-			Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-			foreach (var r in renderers) {
-				// change something in renderer...
-				r.enabled = true; //enabling alll the rooms, i.e showing them all
-
-			}
-
-		}
-		switch ((roomNumber+1) / 25) {
-
-		case 0:
-			foreach (var b in rooms) {
-				if (b.name != "0floor") {
-					Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-					foreach (var r in renderers) {
-						// change something in renderer...
-						r.enabled = false; // like disable it for example. 
-					}
-				}
-			}
-			break;
-		case 1:
-			foreach (var b in rooms) {
-				if (b.name != "1floor") {
-					Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-					foreach (var r in renderers) {
-						// change something in renderer...
-						r.enabled = false; // like disable it for example. 
-					}
-				}
-			}
-			break;
-		case 2:
-			foreach (var b in rooms) {
-				if (b.name == "3floor") {
-					Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-					foreach (var r in renderers) {
-						// change something in renderer...
-						r.enabled = false; // like disable it for example. 
-					}
-				}
-			}
-			break;
-		case 3:
-			foreach (var b in rooms) {
-				if (b.name == "4floor") {
-					Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-					foreach (var r in renderers) {
-						// change something in renderer...
-						r.enabled = false; // like disable it for example. 
-					}
-				}
-			}
-			break;
-//		case 4:
-//			foreach (var b in rooms) {
-//				if (b.name == "5floor") {
-//					Renderer[] renderers = b.GetComponentsInChildren<Renderer> ();
-//					foreach (var r in renderers) {
-//						// change something in renderer...
-//						r.enabled = false; // like disable it for example. 
-//					}
-//				}
-//			}
-//			break;
-		default:
-			break;
-
-		}
-	}
 
 }

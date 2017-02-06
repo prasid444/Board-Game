@@ -32,7 +32,7 @@ public class mainmenu : MonoBehaviour {
 		cameraDesiredToLook = menuTransform;
 	}
 	public void playBoard(){
-		Application.LoadLevel ("scene1");
+		Application.LoadLevel ("gamePlay");
 	}
 	public void notAvailable(){
 		Debug.Log ("Game not available");
